@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Media Vault</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --bg2: #121621;
+      --card: rgba(20, 24, 34, 0.92);
+      --card-strong: rgba(26, 31, 44, 0.98);
+      --text: #f4f7fb;
+      --muted: #9ca7b9;
+      --line: rgba(255, 255, 255, 0.08);
+      --accent: #7c8cff;
+      --accent2: #4dd2ff;
+      --good: #28d17c;
+      --bad: #ff6b7a;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 18px;
+      --radius-sm: 14px;
+      --tap: 54px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:
+        radial-gradient(1200px 900px at 50% -10%, rgba(124, 140, 255, 0.18), transparent 50%),
+        radial-gradient(900px 700px at 100% 0%, rgba(77, 210, 255, 0.12), transparent 45%),
+        linear-gradient(180deg, #090b10 0%, #0b0d12 32%, #07090d 100%);
+      color: var(--text);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    .app {
+      min-height: 100vh;
+      padding:
+        calc(env(safe-area-inset-top) + 16px)
+        16px
+        calc(env(safe-area-inset-bottom) + 16px)
+        16px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .phone {
+      width: 100%;
+      max-width: 430px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .hero {
+      padding: 18px 4px 4px;
+    }
+
+    .title {
+      font-size: 30px;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin: 0 0 8px;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+      max-width: 34ch;
+    }
+
+    .card {
+      background: linear-gradient(180deg, var(--card) 0%, rgba(16, 19, 27, 0.96) 100%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(18px);
+    }
+
+    .card-inner {
+      padding: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .pill {
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.03);
+      padding: 8px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .dropzone {
+      position: relative;
+      border: 1.5px dashed rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.03);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      min-height: 128px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      transition: 180ms ease;
+      cursor: pointer;
+      user-select: none;
+      outline: none;
+    }
+
+    .dropzone:hover,
+    .dropzone:focus-visible {
+      border-color: rgba(124, 140, 255, 0.5);
+      background: rgba(124, 140, 255, 0.06);
+      transform: translateY(-1px);
+    }
+
+    .dropzone.dragover {
+      border-color: rgba(77, 210, 255, 0.75);
+      background: rgba(77, 210, 255, 0.09);
+      transform: scale(1.01);
+    }
+
+    .dropzone .icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 10px;
+      background: linear-gradient(180deg, rgba(124,140,255,0.16), rgba(77,210,255,0.09));
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 24px;
+    }
+
+    .dropzone h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .dropzone p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .field {
+      margin-top: 14px;
+    }
+
+    .label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #dbe4f8;
+      margin: 0 0 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .input {
+      width: 100%;
+      height: var(--tap);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      padding: 0 16px;
+      font-size: 15px;
+      outline: none;
+      transition: 150ms ease;
+    }
+
+    .input:focus {
+      border-color: rgba(124, 140, 255, 0.6);
+      box-shadow: 0 0 0 4px rgba(124, 140, 255, 0.13);
+      background: rgba(255,255,255,0.05);
+    }
+
+    .hint {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .button {
+      min-height: var(--tap);
+      border: 0;
+      border-radius: 18px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: white;
+      cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease, background 120ms ease;
+      box-shadow: 0 12px 24px rgba(0,0,0,0.24);
+    }
+
+    .button:active { transform: scale(0.98); }
+    .button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .button.primary {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    }
+
+    .button.secondary {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .button.good {
+      background: linear-gradient(135deg, #23c26b 0%, #2ee5a0 100%);
+    }
+
+    .button.bad {
+      background: rgba(255, 107, 122, 0.18);
+      border: 1px solid rgba(255, 107, 122, 0.24);
+      color: #ffd6db;
+      box-shadow: none;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .preview {
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    .preview.empty {
+      padding: 22px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .preview .media {
+      width: 100%;
+      max-height: 360px;
+      display: block;
+      object-fit: contain;
+      background: #000;
+    }
+
+    .file-meta {
+      display: grid;
+      gap: 6px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin: 14px 0;
+    }
+
+    .status {
+      min-height: 22px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+      padding-top: 2px;
+    }
+
+    .status.good { color: var(--good); }
+    .status.bad { color: var(--bad); }
+    .status.info { color: #b7c8ff; }
+
+    .progress {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--accent2) 100%);
+      transition: width 220ms ease;
+    }
+
+    .tiny-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .link-btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+    }
+
+    .link-btn:disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .footer-space {
+      height: 4px;
+    }
+
+    input[type="file"] { display: none; }
+
+    @media (max-width: 390px) {
+      .title { font-size: 28px; }
+      .buttons { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main class="phone" role="application" aria-label="Media Vault encryption app">
+      <section class="hero">
+        <h1 class="title">Media Vault</h1>
+        <p class="subtitle">Encrypt photos and videos locally in your browser with a password. Nothing leaves your device.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-inner">
+          <div class="card-header">
+            <h2 class="card-title">Encrypt media</h2>
+            <div class="pill">Image / Video</div>
+          </div>
+
+          <label id="mediaDropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload image or video">
+            <div>
+              <div class="icon">⬆︎</div>
+              <h3>Tap or drop a file here</h3>
+              <p>Choose an image or video from your iPhone, then set a password.</p>
+            </div>
+          </label>
+          <input id="mediaInput" type="file" accept="image/*,video/*" />
+
+          <div class="field">
+            <label class="label" for="passwordInput">Encryption password</label>
+            <input id="passwordInput" class="input" type="password" placeholder="Enter a strong password" autocomplete="new-password" />
+            <div class="hint">Uses AES-GCM with PBKDF2 key derivation in your browser.</div>
+          </div>
+
+          <div class="buttons">
+            <button id="encryptBtn" class="button primary" disabled>Encrypt</button>
+            <button id="clearBtn" class="button secondary" type="button">Clear</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div id="sourcePreviewWrap" class="stack">
+            <div id="sourcePreview" class="preview empty">
+              <div>
+                <strong>No media selected yet</strong><br>
+                <span style="color: var(--muted); font-size: 13px;">Your preview will appear here.</span>
+              </div>
+            </div>
+
+            <div id="sourceMeta" class="file-meta"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-inner">
+          <div class="card-header">
+            <h2 class="card-title">Encrypted file</h2>
+            <div class="pill">Download / Re-open</div>
+          </div>
+
+          <div class="progress" aria-hidden="true">
+            <span id="encryptProgress"></span>
+          </div>
+          <div id="encryptStatus" class="status info">Ready to encrypt.</div>
+
+          <div class="tiny-actions">
+            <a id="downloadEncryptedBtn" class="link-btn" href="#" download="" aria-disabled="true">Download encrypted file</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-inner">
+          <div class="card-header">
+            <h2 class="card-title">Decrypt package</h2>
+            <div class="pill">.encmedia</div>
+          </div>
+
+          <label id="packageDropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload encrypted file">
+            <div>
+              <div class="icon">↧</div>
+              <h3>Tap or drop an encrypted file</h3>
+              <p>Re-upload a package, enter the password, and recover the original media.</p>
+            </div>
+          </label>
+          <input id="packageInput" type="file" accept=".encmedia,application/octet-stream" />
+
+          <div class="field">
+            <label class="label" for="decryptPasswordInput">Password</label>
+            <input id="decryptPasswordInput" class="input" type="password" placeholder="Enter the encryption password" autocomplete="current-password" />
+          </div>
+
+          <div class="buttons">
+            <button id="decryptBtn" class="button good" disabled>Decrypt</button>
+            <button id="clearDecryptBtn" class="button secondary" type="button">Clear</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="progress" aria-hidden="true">
+            <span id="decryptProgress"></span>
+          </div>
+          <div id="decryptStatus" class="status info">No encrypted file selected.</div>
+
+          <div class="tiny-actions">
+            <a id="downloadDecryptedBtn" class="link-btn" href="#" download="" aria-disabled="true">Download recovered file</a>
+          </div>
+
+          <div style="margin-top: 14px;">
+            <div id="decryptedPreview" class="preview empty">
+              <div>
+                <strong>Recovered preview</strong><br>
+                <span style="color: var(--muted); font-size: 13px;">Decrypted image or video will show here.</span>
+              </div>
+            </div>
+            <div id="decryptedMeta" class="file-meta"></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="footer-space"></div>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      // -----------------------------
+      // Editable security settings
+      // -----------------------------
+      const PBKDF2_ITERATIONS = 250000; // Increase for more security, decrease for more speed.
+      const SALT_BYTES = 16;
+      const IV_BYTES = 12;
+      const PACKET_MAGIC = new Uint8Array([0x45, 0x4D, 0x44, 0x31]); // "EMD1"
+      const PACKET_VERSION = 1;
+
+      // -----------------------------
+      // DOM references
+      // -----------------------------
+      const mediaDropzone = document.getElementById("mediaDropzone");
+      const mediaInput = document.getElementById("mediaInput");
+      const passwordInput = document.getElementById("passwordInput");
+      const encryptBtn = document.getElementById("encryptBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const sourcePreview = document.getElementById("sourcePreview");
+      const sourceMeta = document.getElementById("sourceMeta");
+      const encryptProgress = document.getElementById("encryptProgress");
+      const encryptStatus = document.getElementById("encryptStatus");
+      const downloadEncryptedBtn = document.getElementById("downloadEncryptedBtn");
+
+      const packageDropzone = document.getElementById("packageDropzone");
+      const packageInput = document.getElementById("packageInput");
+      const decryptPasswordInput = document.getElementById("decryptPasswordInput");
+      const decryptBtn = document.getElementById("decryptBtn");
+      const clearDecryptBtn = document.getElementById("clearDecryptBtn");
+      const decryptProgress = document.getElementById("decryptProgress");
+      const decryptStatus = document.getElementById("decryptStatus");
+      const downloadDecryptedBtn = document.getElementById("downloadDecryptedBtn");
+      const decryptedPreview = document.getElementById("decryptedPreview");
+      const decryptedMeta = document.getElementById("decryptedMeta");
+
+      // -----------------------------
+      // App state
+      // -----------------------------
+      const state = {
+        mediaFile: null,
+        packageFile: null,
+        encryptedBlob: null,
+        encryptedUrl: null,
+        encryptedName: "",
+        decryptedBlob: null,
+        decryptedUrl: null,
+        sourcePreviewUrl: null,
+        decryptedPreviewUrl: null,
+      };
+
+      const textEncoder = new TextEncoder();
+      const textDecoder = new TextDecoder();
+
+      // -----------------------------
+      // Helpers
+      // -----------------------------
+      function setStatus(el, message, kind = "info") {
+        el.textContent = message;
+        el.className = `status ${kind}`;
+      }
+
+      function setProgress(el, value) {
+        const clamped = Math.max(0, Math.min(100, value));
+        el.style.width = `${clamped}%`;
+      }
+
+      function clearElement(el) {
+        el.innerHTML = "";
+      }
+
+      function revokeUrl(key) {
+        if (state[key]) {
+          URL.revokeObjectURL(state[key]);
+          state[key] = null;
+        }
+      }
+
+      function sanitizeDownloadName(name) {
+        const base = String(name || "file").trim().replace(/[\\/:*?"<>|]+/g, "_");
+        return base || "file";
+      }
+
+      function inferCategoryFromName(fileName) {
+        const lower = fileName.toLowerCase();
+        if (/\.(jpg|jpeg|png|gif|webp|bmp|avif|heic|heif)$/i.test(lower)) return "image";
+        if (/\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i.test(lower)) return "video";
+        return "";
+      }
+
+      function inferMimeType(file) {
+        if (file.type) return file.type;
+        const category = inferCategoryFromName(file.name);
+        if (category === "image") return "image/jpeg";
+        if (category === "video") return "video/mp4";
+        return "application/octet-stream";
+      }
+
+      function isSupportedMedia(file) {
+        if (!file) return false;
+        if (file.type.startsWith("image/") || file.type.startsWith("video/")) return true;
+        const category = inferCategoryFromName(file.name);
+        return category === "image" || category === "video";
+      }
+
+      function isImageFile(file) {
+        return (file.type && file.type.startsWith("image/")) || inferCategoryFromName(file.name) === "image";
+      }
+
+      function isVideoFile(file) {
+        return (file.type && file.type.startsWith("video/")) || inferCategoryFromName(file.name) === "video";
+      }
+
+      function fileInfoLines(file) {
+        return [
+          `Name: ${file.name}`,
+          `Type: ${file.type || "Unknown MIME type"}`,
+          `Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+        ];
+      }
+
+      function renderFileMeta(container, file, extra = []) {
+        container.innerHTML = "";
+        const lines = [...fileInfoLines(file), ...extra];
+        for (const line of lines) {
+          const div = document.createElement("div");
+          div.textContent = line;
+          container.appendChild(div);
+        }
+      }
+
+      function showPreview(target, file, url) {
+        target.classList.remove("empty");
+        clearElement(target);
+
+        if (isImageFile(file)) {
+          const img = document.createElement("img");
+          img.className = "media";
+          img.alt = file.name;
+          img.src = url;
+          target.appendChild(img);
+          return;
+        }
+
+        if (isVideoFile(file)) {
+          const video = document.createElement("video");
+          video.className = "media";
+          video.src = url;
+          video.controls = true;
+          video.playsInline = true;
+          video.preload = "metadata";
+          target.appendChild(video);
+          return;
+        }
+
+        target.classList.add("empty");
+        target.innerHTML = `<div><strong>Preview unavailable</strong><br><span style="color: var(--muted); font-size: 13px;">This file type cannot be previewed.</span></div>`;
+      }
+
+      function resetSourceUI() {
+        state.mediaFile = null;
+        encryptBtn.disabled = true;
+        mediaInput.value = "";
+        passwordInput.value = "";
+        renderEmptySourcePreview();
+        setStatus(encryptStatus, "Ready to encrypt.", "info");
+        setProgress(encryptProgress, 0);
+        downloadEncryptedBtn.removeAttribute("href");
+        downloadEncryptedBtn.removeAttribute("download");
+        downloadEncryptedBtn.setAttribute("aria-disabled", "true");
+        downloadEncryptedBtn.style.pointerEvents = "none";
+        downloadEncryptedBtn.style.opacity = "0.45";
+        revokeUrl("encryptedUrl");
+        state.encryptedBlob = null;
+        state.encryptedName = "";
+        revokeUrl("sourcePreviewUrl");
+      }
+
+      function resetDecryptUI() {
+        state.packageFile = null;
+        decryptBtn.disabled = true;
+        packageInput.value = "";
+        decryptPasswordInput.value = "";
+        renderEmptyDecryptedPreview();
+        setStatus(decryptStatus, "No encrypted file selected.", "info");
+        setProgress(decryptProgress, 0);
+        downloadDecryptedBtn.removeAttribute("href");
+        downloadDecryptedBtn.removeAttribute("download");
+        downloadDecryptedBtn.setAttribute("aria-disabled", "true");
+        downloadDecryptedBtn.style.pointerEvents = "none";
+        downloadDecryptedBtn.style.opacity = "0.45";
+        revokeUrl("decryptedUrl");
+        state.decryptedBlob = null;
+        revokeUrl("decryptedPreviewUrl");
+      }
+
+      function renderEmptySourcePreview() {
+        sourcePreview.classList.add("empty");
+        sourcePreview.innerHTML = `
+          <div>
+            <strong>No media selected yet</strong><br>
+            <span style="color: var(--muted); font-size: 13px;">Your preview will appear here.</span>
+          </div>
+        `;
+        clearElement(sourceMeta);
+      }
+
+      function renderEmptyDecryptedPreview() {
+        decryptedPreview.classList.add("empty");
+        decryptedPreview.innerHTML = `
+          <div>
+            <strong>Recovered preview</strong><br>
+            <span style="color: var(--muted); font-size: 13px;">Decrypted image or video will show here.</span>
+          </div>
+        `;
+        clearElement(decryptedMeta);
+      }
+
+      function readFileAsArrayBuffer(file) {
+        return file.arrayBuffer();
+      }
+
+      function concatUint8Arrays(arrays) {
+        const total = arrays.reduce((sum, arr) => sum + arr.length, 0);
+        const result = new Uint8Array(total);
+        let offset = 0;
+        for (const arr of arrays) {
+          result.set(arr, offset);
+          offset += arr.length;
+        }
+        return result;
+      }
+
+      function buildPacket({ salt, iv, metadata, ciphertext }) {
+        const metaBytes = textEncoder.encode(JSON.stringify(metadata));
+
+        const header = new Uint8Array(
+          PACKET_MAGIC.length + 1 + 4 + 4 + 4 + salt.length + iv.length + metaBytes.length
+        );
+        const view = new DataView(header.buffer);
+
+        let offset = 0;
+        header.set(PACKET_MAGIC, offset);
+        offset += PACKET_MAGIC.length;
+
+        view.setUint8(offset, PACKET_VERSION);
+        offset += 1;
+
+        view.setUint32(offset, salt.length, false); // big-endian
+        offset += 4;
+
+        view.setUint32(offset, iv.length, false);
+        offset += 4;
+
+        view.setUint32(offset, metaBytes.length, false);
+        offset += 4;
+
+        header.set(salt, offset);
+        offset += salt.length;
+
+        header.set(iv, offset);
+        offset += iv.length;
+
+        header.set(metaBytes, offset);
+
+        return concatUint8Arrays([header, ciphertext]);
+      }
+
+      function parsePacket(buffer) {
+        const bytes = new Uint8Array(buffer);
+        const minHeader = PACKET_MAGIC.length + 1 + 4 + 4 + 4;
+        if (bytes.length < minHeader) {
+          throw new Error("Invalid encrypted file.");
+        }
+
+        for (let i = 0; i < PACKET_MAGIC.length; i++) {
+          if (bytes[i] !== PACKET_MAGIC[i]) {
+            throw new Error("This file is not a valid Media Vault package.");
+          }
+        }
+
+        const view = new DataView(buffer);
+        let offset = PACKET_MAGIC.length;
+
+        const version = view.getUint8(offset);
+        offset += 1;
+
+        if (version !== PACKET_VERSION) {
+          throw new Error("Unsupported encrypted file version.");
+        }
+
+        const saltLen = view.getUint32(offset, false);
+        offset += 4;
+        const ivLen = view.getUint32(offset, false);
+        offset += 4;
+        const metaLen = view.getUint32(offset, false);
+        offset += 4;
+
+        const totalHeader = offset + saltLen + ivLen + metaLen;
+        if (bytes.length < totalHeader) {
+          throw new Error("Encrypted file looks corrupted or incomplete.");
+        }
+
+        const salt = bytes.slice(offset, offset + saltLen);
+        offset += saltLen;
+
+        const iv = bytes.slice(offset, offset + ivLen);
+        offset += ivLen;
+
+        const metaBytes = bytes.slice(offset, offset + metaLen);
+        offset += metaLen;
+
+        const metadata = JSON.parse(textDecoder.decode(metaBytes));
+        const ciphertext = bytes.slice(offset);
+
+        if (ciphertext.length === 0) {
+          throw new Error("Encrypted file contains no data.");
+        }
+
+        return { salt, iv, metadata, ciphertext };
+      }
+
+      async function deriveKey(password, salt) {
+        const keyMaterial = await crypto.subtle.importKey(
+          "raw",
+          textEncoder.encode(password),
+          "PBKDF2",
+          false,
+          ["deriveKey"]
+        );
+
+        return crypto.subtle.deriveKey(
+          {
+            name: "PBKDF2",
+            salt,
+            iterations: PBKDF2_ITERATIONS,
+            hash: "SHA-256",
+          },
+          keyMaterial,
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["encrypt", "decrypt"]
+        );
+      }
+
+      function setEncryptedDownload(blob, filename) {
+        revokeUrl("encryptedUrl");
+        state.encryptedBlob = blob;
+        state.encryptedUrl = URL.createObjectURL(blob);
+        state.encryptedName = filename;
+
+        downloadEncryptedBtn.href = state.encryptedUrl;
+        downloadEncryptedBtn.download = filename;
+        downloadEncryptedBtn.removeAttribute("aria-disabled");
+        downloadEncryptedBtn.style.pointerEvents = "auto";
+        downloadEncryptedBtn.style.opacity = "1";
+      }
+
+      function setDecryptedDownload(blob, filename) {
+        revokeUrl("decryptedUrl");
+        state.decryptedBlob = blob;
+        state.decryptedUrl = URL.createObjectURL(blob);
+
+        downloadDecryptedBtn.href = state.decryptedUrl;
+        downloadDecryptedBtn.download = filename;
+        downloadDecryptedBtn.removeAttribute("aria-disabled");
+        downloadDecryptedBtn.style.pointerEvents = "auto";
+        downloadDecryptedBtn.style.opacity = "1";
+      }
+
+      function updateEncryptButtonState() {
+        encryptBtn.disabled = !(state.mediaFile && passwordInput.value.trim());
+      }
+
+      function updateDecryptButtonState() {
+        decryptBtn.disabled = !(state.packageFile && decryptPasswordInput.value.trim());
+      }
+
+      function selectMediaFile(file) {
+        if (!file) return;
+
+        if (!isSupportedMedia(file)) {
+          setStatus(encryptStatus, "Please choose an image or video file.", "bad");
+          return;
+        }
+
+        state.mediaFile = file;
+        updateEncryptButtonState();
+        setStatus(encryptStatus, "File loaded. Add a password, then encrypt.", "info");
+
+        revokeUrl("sourcePreviewUrl");
+        state.sourcePreviewUrl = URL.createObjectURL(file);
+        showPreview(sourcePreview, file, state.sourcePreviewUrl);
+        renderFileMeta(sourceMeta, file, [
+          `Category: ${isImageFile(file) ? "Image" : isVideoFile(file) ? "Video" : "Unknown"}`,
+          `Ready for encryption.`,
+        ]);
+      }
+
+      function selectPackageFile(file) {
+        if (!file) return;
+
+        state.packageFile = file;
+        updateDecryptButtonState();
+        setStatus(decryptStatus, "Encrypted package loaded. Enter the password and decrypt.", "info");
+
+        renderEmptyDecryptedPreview();
+        clearElement(decryptedMeta);
+      }
+
+      async function encryptSelectedFile() {
+        const file = state.mediaFile;
+        const password = passwordInput.value.trim();
+
+        if (!file) {
+          setStatus(encryptStatus, "Choose an image or video first.", "bad");
+          return;
+        }
+
+        if (!password) {
+          setStatus(encryptStatus, "Enter a password before encrypting.", "bad");
+          return;
+        }
+
+        try {
+          encryptBtn.disabled = true;
+          setStatus(encryptStatus, "Preparing encryption...", "info");
+          setProgress(encryptProgress, 10);
+
+          const fileBuffer = await readFileAsArrayBuffer(file);
+          setProgress(encryptProgress, 25);
+
+          const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+          const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+
+          setStatus(encryptStatus, "Deriving key...", "info");
+          const key = await deriveKey(password, salt);
+          setProgress(encryptProgress, 45);
+
+          setStatus(encryptStatus, "Encrypting media locally...", "info");
+          const ciphertextBuffer = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv },
+            key,
+            fileBuffer
+          );
+          setProgress(encryptProgress, 75);
+
+          const metadata = {
+            originalName: file.name,
+            originalType: inferMimeType(file),
+            originalSize: file.size,
+            originalLastModified: file.lastModified || null,
+            createdAt: new Date().toISOString(),
+            algorithm: "AES-GCM",
+            kdf: {
+              name: "PBKDF2",
+              hash: "SHA-256",
+              iterations: PBKDF2_ITERATIONS,
+            },
+          };
+
+          const packageBytes = buildPacket({
+            salt,
+            iv,
+            metadata,
+            ciphertext: new Uint8Array(ciphertextBuffer),
+          });
+
+          const encryptedBlob = new Blob([packageBytes], { type: "application/octet-stream" });
+          const safeBase = sanitizeDownloadName(file.name);
+          const packageName = `${safeBase}.encmedia`;
+
+          setEncryptedDownload(encryptedBlob, packageName);
+          setProgress(encryptProgress, 100);
+          setStatus(encryptStatus, `Encrypted successfully. Download "${packageName}".`, "good");
+        } catch (err) {
+          console.error(err);
+          setProgress(encryptProgress, 0);
+          setStatus(
+            encryptStatus,
+            "Encryption failed. Check the file and try again.",
+            "bad"
+          );
+        } finally {
+          encryptBtn.disabled = !(state.mediaFile && passwordInput.value.trim());
+        }
+      }
+
+      async function decryptSelectedFile() {
+        const file = state.packageFile;
+        const password = decryptPasswordInput.value.trim();
+
+        if (!file) {
+          setStatus(decryptStatus, "Choose an encrypted file first.", "bad");
+          return;
+        }
+
+        if (!password) {
+          setStatus(decryptStatus, "Enter the password before decrypting.", "bad");
+          return;
+        }
+
+        try {
+          decryptBtn.disabled = true;
+          setStatus(decryptStatus, "Reading encrypted package...", "info");
+          setProgress(decryptProgress, 10);
+
+          const buffer = await readFileAsArrayBuffer(file);
+          setProgress(decryptProgress, 25);
+
+          const packet = parsePacket(buffer);
+          setProgress(decryptProgress, 40);
+
+          setStatus(decryptStatus, "Deriving key...", "info");
+          const key = await deriveKey(password, packet.salt);
+          setProgress(decryptProgress, 60);
+
+          setStatus(decryptStatus, "Decrypting locally...", "info");
+          const plaintextBuffer = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: packet.iv },
+            key,
+            packet.ciphertext
+          );
+          setProgress(decryptProgress, 85);
+
+          const fileName = sanitizeDownloadName(packet.metadata.originalName || "recovered-file");
+          const mimeType = packet.metadata.originalType || "application/octet-stream";
+          const blob = new Blob([plaintextBuffer], { type: mimeType });
+
+          setDecryptedDownload(blob, fileName);
+          setProgress(decryptProgress, 100);
+          setStatus(decryptStatus, `Decrypted successfully. Download "${fileName}".`, "good");
+
+          // Show a recovered preview using the original type/name.
+          const previewFile = new File([blob], fileName, { type: mimeType });
+          revokeUrl("decryptedPreviewUrl");
+          state.decryptedPreviewUrl = URL.createObjectURL(previewFile);
+          showPreview(decryptedPreview, previewFile, state.decryptedPreviewUrl);
+          renderFileMeta(decryptedMeta, previewFile, [
+            `Recovered from encrypted package.`,
+          ]);
+        } catch (err) {
+          console.error(err);
+          setProgress(decryptProgress, 0);
+
+          const message = String(err && err.message ? err.message : err || "");
+          const isPasswordIssue =
+            /operationerror|decrypt|authentication|subtlecrypto/i.test(message);
+
+          setStatus(
+            decryptStatus,
+            isPasswordIssue
+              ? "Wrong password, tampered file, or corrupted package."
+              : "Decryption failed. Make sure the file is a valid Media Vault package.",
+            "bad"
+          );
+        } finally {
+          decryptBtn.disabled = !(state.packageFile && decryptPasswordInput.value.trim());
+        }
+      }
+
+      // -----------------------------
+      // Drag and drop helpers
+      // -----------------------------
+      function setupDropzone(dropzone, input, onFileSelected) {
+        const openPicker = () => input.click();
+
+        dropzone.addEventListener("click", openPicker);
+        dropzone.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openPicker();
+          }
+        });
+
+        ["dragenter", "dragover"].forEach((eventName) => {
+          dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add("dragover");
+          });
+        });
+
+        ["dragleave", "drop"].forEach((eventName) => {
+          dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove("dragover");
+          });
+        });
+
+        dropzone.addEventListener("drop", (e) => {
+          const file = e.dataTransfer?.files?.[0];
+          if (file) onFileSelected(file);
+        });
+
+        input.addEventListener("change", () => {
+          const file = input.files?.[0];
+          if (file) onFileSelected(file);
+        });
+      }
+
+      // -----------------------------
+      // Event wiring
+      // -----------------------------
+      setupDropzone(mediaDropzone, mediaInput, selectMediaFile);
+      setupDropzone(packageDropzone, packageInput, selectPackageFile);
+
+      passwordInput.addEventListener("input", updateEncryptButtonState);
+      decryptPasswordInput.addEventListener("input", updateDecryptButtonState);
+
+      encryptBtn.addEventListener("click", encryptSelectedFile);
+      decryptBtn.addEventListener("click", decryptSelectedFile);
+
+      clearBtn.addEventListener("click", resetSourceUI);
+      clearDecryptBtn.addEventListener("click", resetDecryptUI);
+
+      downloadEncryptedBtn.addEventListener("click", () => {
+        if (!state.encryptedUrl) return;
+        setStatus(encryptStatus, `Ready: ${state.encryptedName}`, "good");
+      });
+
+      downloadDecryptedBtn.addEventListener("click", () => {
+        if (!state.decryptedUrl) return;
+        setStatus(decryptStatus, "Recovered file ready.", "good");
+      });
+
+      // Initial state
+      renderEmptySourcePreview();
+      renderEmptyDecryptedPreview();
+      setProgress(encryptProgress, 0);
+      setProgress(decryptProgress, 0);
+
+      // Clean up object URLs on page close.
+      window.addEventListener("beforeunload", () => {
+        revokeUrl("encryptedUrl");
+        revokeUrl("decryptedUrl");
+        revokeUrl("sourcePreviewUrl");
+        revokeUrl("decryptedPreviewUrl");
+      });
+    })();
+  </script>
+</body>
+</html>
