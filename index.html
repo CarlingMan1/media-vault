@@ -53,7 +53,7 @@
 
     .phone {
       width: 100%;
-      max-width: 430px;
+      max-width: 760px;
       display: flex;
       flex-direction: column;
       gap: 14px;
@@ -264,6 +264,55 @@
       gap: 12px;
     }
 
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .mini-preview {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.03);
+      min-height: 110px;
+    }
+
+    .mini-preview .media {
+      width: 100%;
+      height: 110px;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
+
+    .mini-caption {
+      padding: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .file-chip {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 11px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
     .preview {
       border-radius: var(--radius-lg);
       overflow: hidden;
@@ -369,6 +418,10 @@
 
     input[type="file"] { display: none; }
 
+    @media (max-width: 700px) {
+      .phone { max-width: 430px; }
+    }
+
     @media (max-width: 390px) {
       .title { font-size: 28px; }
       .buttons { grid-template-columns: 1fr; }
@@ -387,17 +440,17 @@
         <div class="card-inner">
           <div class="card-header">
             <h2 class="card-title">Encrypt media</h2>
-            <div class="pill">Image / Video</div>
+            <div class="pill">Batch Upload</div>
           </div>
 
           <label id="mediaDropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload image or video">
             <div>
               <div class="icon">⬆︎</div>
-              <h3>Tap or drop a file here</h3>
-              <p>Choose an image or video from your iPhone, then set a password.</p>
+              <h3>Tap or drop files here</h3>
+              <p>Select multiple images and videos, then encrypt them into one package.</p>
             </div>
           </label>
-          <input id="mediaInput" type="file" accept="image/*,video/*" />
+          <input id="mediaInput" type="file" accept="image/*,video/*" multiple />
 
           <div class="field">
             <label class="label" for="passwordInput">Encryption password</label>
@@ -421,6 +474,7 @@
             </div>
 
             <div id="sourceMeta" class="file-meta"></div>
+            <div id="sourceList" class="file-list"></div>
           </div>
         </div>
       </section>
@@ -478,6 +532,7 @@
 
           <div class="tiny-actions">
             <a id="downloadDecryptedBtn" class="link-btn" href="#" download="" aria-disabled="true">Download recovered file</a>
+            <a id="downloadAllZipBtn" class="link-btn" href="#" download="" aria-disabled="true">Download all recovered files (ZIP)</a>
           </div>
 
           <div style="margin-top: 14px;">
@@ -488,6 +543,7 @@
               </div>
             </div>
             <div id="decryptedMeta" class="file-meta"></div>
+            <div id="decryptedList" class="file-list"></div>
           </div>
         </div>
       </section>
@@ -500,18 +556,12 @@
     (() => {
       "use strict";
 
-      // -----------------------------
-      // Editable security settings
-      // -----------------------------
-      const PBKDF2_ITERATIONS = 250000; // Increase for more security, decrease for more speed.
+      const PBKDF2_ITERATIONS = 250000;
       const SALT_BYTES = 16;
       const IV_BYTES = 12;
-      const PACKET_MAGIC = new Uint8Array([0x45, 0x4D, 0x44, 0x31]); // "EMD1"
-      const PACKET_VERSION = 1;
+      const PACKET_MAGIC = new Uint8Array([0x45, 0x4D, 0x44, 0x31]); // EMD1
+      const PACKET_VERSION = 2;
 
-      // -----------------------------
-      // DOM references
-      // -----------------------------
       const mediaDropzone = document.getElementById("mediaDropzone");
       const mediaInput = document.getElementById("mediaInput");
       const passwordInput = document.getElementById("passwordInput");
@@ -519,6 +569,7 @@
       const clearBtn = document.getElementById("clearBtn");
       const sourcePreview = document.getElementById("sourcePreview");
       const sourceMeta = document.getElementById("sourceMeta");
+      const sourceList = document.getElementById("sourceList");
       const encryptProgress = document.getElementById("encryptProgress");
       const encryptStatus = document.getElementById("encryptStatus");
       const downloadEncryptedBtn = document.getElementById("downloadEncryptedBtn");
@@ -531,30 +582,26 @@
       const decryptProgress = document.getElementById("decryptProgress");
       const decryptStatus = document.getElementById("decryptStatus");
       const downloadDecryptedBtn = document.getElementById("downloadDecryptedBtn");
+      const downloadAllZipBtn = document.getElementById("downloadAllZipBtn");
       const decryptedPreview = document.getElementById("decryptedPreview");
       const decryptedMeta = document.getElementById("decryptedMeta");
+      const decryptedList = document.getElementById("decryptedList");
 
-      // -----------------------------
-      // App state
-      // -----------------------------
       const state = {
-        mediaFile: null,
+        mediaFiles: [],
         packageFile: null,
-        encryptedBlob: null,
         encryptedUrl: null,
         encryptedName: "",
-        decryptedBlob: null,
         decryptedUrl: null,
-        sourcePreviewUrl: null,
+        decryptedZipUrl: null,
+        decryptedItems: [],
+        sourcePreviewUrls: [],
         decryptedPreviewUrl: null,
       };
 
       const textEncoder = new TextEncoder();
       const textDecoder = new TextDecoder();
 
-      // -----------------------------
-      // Helpers
-      // -----------------------------
       function setStatus(el, message, kind = "info") {
         el.textContent = message;
         el.className = `status ${kind}`;
@@ -565,8 +612,12 @@
         el.style.width = `${clamped}%`;
       }
 
-      function clearElement(el) {
-        el.innerHTML = "";
+      function formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        const value = bytes / Math.pow(1024, exp);
+        return `${value.toFixed(exp === 0 ? 0 : 2)} ${units[exp]}`;
       }
 
       function revokeUrl(key) {
@@ -576,13 +627,18 @@
         }
       }
 
-      function sanitizeDownloadName(name) {
-        const base = String(name || "file").trim().replace(/[\\/:*?"<>|]+/g, "_");
-        return base || "file";
+      function clearPreviewListUrls() {
+        state.sourcePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+        state.sourcePreviewUrls = [];
       }
 
-      function inferCategoryFromName(fileName) {
-        const lower = fileName.toLowerCase();
+      function sanitizeDownloadName(name) {
+        const safe = String(name || "file").trim().replace(/[\\/:*?"<>|]+/g, "_");
+        return safe || "file";
+      }
+
+      function inferCategoryFromName(name) {
+        const lower = String(name || "").toLowerCase();
         if (/\.(jpg|jpeg|png|gif|webp|bmp|avif|heic|heif)$/i.test(lower)) return "image";
         if (/\.(mp4|mov|m4v|webm|avi|mkv|3gp)$/i.test(lower)) return "video";
         return "";
@@ -598,226 +654,222 @@
 
       function isSupportedMedia(file) {
         if (!file) return false;
-        if (file.type.startsWith("image/") || file.type.startsWith("video/")) return true;
+        if (String(file.type).startsWith("image/") || String(file.type).startsWith("video/")) return true;
         const category = inferCategoryFromName(file.name);
         return category === "image" || category === "video";
       }
 
       function isImageFile(file) {
-        return (file.type && file.type.startsWith("image/")) || inferCategoryFromName(file.name) === "image";
+        return String(file.type).startsWith("image/") || inferCategoryFromName(file.name) === "image";
       }
 
       function isVideoFile(file) {
-        return (file.type && file.type.startsWith("video/")) || inferCategoryFromName(file.name) === "video";
+        return String(file.type).startsWith("video/") || inferCategoryFromName(file.name) === "video";
       }
 
-      function fileInfoLines(file) {
-        return [
-          `Name: ${file.name}`,
-          `Type: ${file.type || "Unknown MIME type"}`,
-          `Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB`,
-        ];
+      function bytesToBase64(bytes) {
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
       }
 
-      function renderFileMeta(container, file, extra = []) {
-        container.innerHTML = "";
-        const lines = [...fileInfoLines(file), ...extra];
-        for (const line of lines) {
-          const div = document.createElement("div");
-          div.textContent = line;
-          container.appendChild(div);
-        }
-      }
-
-      function showPreview(target, file, url) {
-        target.classList.remove("empty");
-        clearElement(target);
-
-        if (isImageFile(file)) {
-          const img = document.createElement("img");
-          img.className = "media";
-          img.alt = file.name;
-          img.src = url;
-          target.appendChild(img);
-          return;
-        }
-
-        if (isVideoFile(file)) {
-          const video = document.createElement("video");
-          video.className = "media";
-          video.src = url;
-          video.controls = true;
-          video.playsInline = true;
-          video.preload = "metadata";
-          target.appendChild(video);
-          return;
-        }
-
-        target.classList.add("empty");
-        target.innerHTML = `<div><strong>Preview unavailable</strong><br><span style="color: var(--muted); font-size: 13px;">This file type cannot be previewed.</span></div>`;
-      }
-
-      function resetSourceUI() {
-        state.mediaFile = null;
-        encryptBtn.disabled = true;
-        mediaInput.value = "";
-        passwordInput.value = "";
-        renderEmptySourcePreview();
-        setStatus(encryptStatus, "Ready to encrypt.", "info");
-        setProgress(encryptProgress, 0);
-        downloadEncryptedBtn.removeAttribute("href");
-        downloadEncryptedBtn.removeAttribute("download");
-        downloadEncryptedBtn.setAttribute("aria-disabled", "true");
-        downloadEncryptedBtn.style.pointerEvents = "none";
-        downloadEncryptedBtn.style.opacity = "0.45";
-        revokeUrl("encryptedUrl");
-        state.encryptedBlob = null;
-        state.encryptedName = "";
-        revokeUrl("sourcePreviewUrl");
-      }
-
-      function resetDecryptUI() {
-        state.packageFile = null;
-        decryptBtn.disabled = true;
-        packageInput.value = "";
-        decryptPasswordInput.value = "";
-        renderEmptyDecryptedPreview();
-        setStatus(decryptStatus, "No encrypted file selected.", "info");
-        setProgress(decryptProgress, 0);
-        downloadDecryptedBtn.removeAttribute("href");
-        downloadDecryptedBtn.removeAttribute("download");
-        downloadDecryptedBtn.setAttribute("aria-disabled", "true");
-        downloadDecryptedBtn.style.pointerEvents = "none";
-        downloadDecryptedBtn.style.opacity = "0.45";
-        revokeUrl("decryptedUrl");
-        state.decryptedBlob = null;
-        revokeUrl("decryptedPreviewUrl");
-      }
-
-      function renderEmptySourcePreview() {
-        sourcePreview.classList.add("empty");
-        sourcePreview.innerHTML = `
-          <div>
-            <strong>No media selected yet</strong><br>
-            <span style="color: var(--muted); font-size: 13px;">Your preview will appear here.</span>
-          </div>
-        `;
-        clearElement(sourceMeta);
-      }
-
-      function renderEmptyDecryptedPreview() {
-        decryptedPreview.classList.add("empty");
-        decryptedPreview.innerHTML = `
-          <div>
-            <strong>Recovered preview</strong><br>
-            <span style="color: var(--muted); font-size: 13px;">Decrypted image or video will show here.</span>
-          </div>
-        `;
-        clearElement(decryptedMeta);
+      function base64ToBytes(base64) {
+        const binary = atob(base64);
+        const out = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+        return out;
       }
 
       function readFileAsArrayBuffer(file) {
         return file.arrayBuffer();
       }
 
-      function concatUint8Arrays(arrays) {
-        const total = arrays.reduce((sum, arr) => sum + arr.length, 0);
-        const result = new Uint8Array(total);
-        let offset = 0;
-        for (const arr of arrays) {
-          result.set(arr, offset);
-          offset += arr.length;
+      const crc32Table = (() => {
+        const table = new Uint32Array(256);
+        for (let i = 0; i < 256; i++) {
+          let c = i;
+          for (let j = 0; j < 8; j++) {
+            c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+          }
+          table[i] = c >>> 0;
         }
-        return result;
+        return table;
+      })();
+
+      function crc32(bytes) {
+        let crc = 0xffffffff;
+        for (let i = 0; i < bytes.length; i++) {
+          crc = crc32Table[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+        }
+        return (crc ^ 0xffffffff) >>> 0;
       }
 
-      function buildPacket({ salt, iv, metadata, ciphertext }) {
+      function concatUint8Arrays(arrays) {
+        const total = arrays.reduce((sum, arr) => sum + arr.length, 0);
+        const out = new Uint8Array(total);
+        let offset = 0;
+        arrays.forEach((arr) => {
+          out.set(arr, offset);
+          offset += arr.length;
+        });
+        return out;
+      }
+
+      function buildPacketV2({ salt, metadata, ciphertext }) {
         const metaBytes = textEncoder.encode(JSON.stringify(metadata));
-
-        const header = new Uint8Array(
-          PACKET_MAGIC.length + 1 + 4 + 4 + 4 + salt.length + iv.length + metaBytes.length
-        );
+        const header = new Uint8Array(PACKET_MAGIC.length + 1 + 4 + 4 + salt.length + metaBytes.length);
         const view = new DataView(header.buffer);
-
         let offset = 0;
         header.set(PACKET_MAGIC, offset);
         offset += PACKET_MAGIC.length;
-
         view.setUint8(offset, PACKET_VERSION);
         offset += 1;
-
-        view.setUint32(offset, salt.length, false); // big-endian
+        view.setUint32(offset, salt.length, false);
         offset += 4;
-
-        view.setUint32(offset, iv.length, false);
-        offset += 4;
-
         view.setUint32(offset, metaBytes.length, false);
         offset += 4;
-
         header.set(salt, offset);
         offset += salt.length;
-
-        header.set(iv, offset);
-        offset += iv.length;
-
         header.set(metaBytes, offset);
-
         return concatUint8Arrays([header, ciphertext]);
+      }
+
+      async function buildZipBlob(items) {
+        const encoder = new TextEncoder();
+        const localParts = [];
+        const centralParts = [];
+        let offset = 0;
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const name = sanitizeDownloadName(item.name || `file-${i + 1}`);
+          const nameBytes = encoder.encode(name);
+          const dataBytes = new Uint8Array(await item.blob.arrayBuffer());
+          const size = dataBytes.length;
+          const crc = crc32(dataBytes);
+
+          const localHeader = new Uint8Array(30 + nameBytes.length);
+          const localView = new DataView(localHeader.buffer);
+          localView.setUint32(0, 0x04034b50, true);
+          localView.setUint16(4, 20, true);
+          localView.setUint16(6, 0, true);
+          localView.setUint16(8, 0, true);
+          localView.setUint16(10, 0, true);
+          localView.setUint16(12, 0, true);
+          localView.setUint32(14, crc, true);
+          localView.setUint32(18, size, true);
+          localView.setUint32(22, size, true);
+          localView.setUint16(26, nameBytes.length, true);
+          localView.setUint16(28, 0, true);
+          localHeader.set(nameBytes, 30);
+
+          const centralHeader = new Uint8Array(46 + nameBytes.length);
+          const centralView = new DataView(centralHeader.buffer);
+          centralView.setUint32(0, 0x02014b50, true);
+          centralView.setUint16(4, 20, true);
+          centralView.setUint16(6, 20, true);
+          centralView.setUint16(8, 0, true);
+          centralView.setUint16(10, 0, true);
+          centralView.setUint16(12, 0, true);
+          centralView.setUint16(14, 0, true);
+          centralView.setUint32(16, crc, true);
+          centralView.setUint32(20, size, true);
+          centralView.setUint32(24, size, true);
+          centralView.setUint16(28, nameBytes.length, true);
+          centralView.setUint16(30, 0, true);
+          centralView.setUint16(32, 0, true);
+          centralView.setUint16(34, 0, true);
+          centralView.setUint16(36, 0, true);
+          centralView.setUint32(38, 0, true);
+          centralView.setUint32(42, offset, true);
+          centralHeader.set(nameBytes, 46);
+
+          localParts.push(localHeader, dataBytes);
+          centralParts.push(centralHeader);
+          offset += localHeader.length + dataBytes.length;
+        }
+
+        const centralDirectory = concatUint8Arrays(centralParts);
+        const end = new Uint8Array(22);
+        const endView = new DataView(end.buffer);
+        endView.setUint32(0, 0x06054b50, true);
+        endView.setUint16(4, 0, true);
+        endView.setUint16(6, 0, true);
+        endView.setUint16(8, items.length, true);
+        endView.setUint16(10, items.length, true);
+        endView.setUint32(12, centralDirectory.length, true);
+        endView.setUint32(16, offset, true);
+        endView.setUint16(20, 0, true);
+
+        return new Blob([concatUint8Arrays(localParts), centralDirectory, end], { type: "application/zip" });
       }
 
       function parsePacket(buffer) {
         const bytes = new Uint8Array(buffer);
-        const minHeader = PACKET_MAGIC.length + 1 + 4 + 4 + 4;
-        if (bytes.length < minHeader) {
-          throw new Error("Invalid encrypted file.");
-        }
-
+        if (bytes.length < PACKET_MAGIC.length + 1 + 4 + 4) throw new Error("Invalid encrypted file.");
         for (let i = 0; i < PACKET_MAGIC.length; i++) {
-          if (bytes[i] !== PACKET_MAGIC[i]) {
-            throw new Error("This file is not a valid Media Vault package.");
-          }
+          if (bytes[i] !== PACKET_MAGIC[i]) throw new Error("This file is not a valid Media Vault package.");
         }
-
         const view = new DataView(buffer);
         let offset = PACKET_MAGIC.length;
-
         const version = view.getUint8(offset);
         offset += 1;
-
-        if (version !== PACKET_VERSION) {
-          throw new Error("Unsupported encrypted file version.");
-        }
-
         const saltLen = view.getUint32(offset, false);
         offset += 4;
-        const ivLen = view.getUint32(offset, false);
-        offset += 4;
+
+        if (version === 1) {
+          const ivLen = view.getUint32(offset, false);
+          offset += 4;
+          const metaLen = view.getUint32(offset, false);
+          offset += 4;
+          const totalHeader = offset + saltLen + ivLen + metaLen;
+          if (bytes.length < totalHeader) throw new Error("Encrypted file looks corrupted or incomplete.");
+          const salt = bytes.slice(offset, offset + saltLen);
+          offset += saltLen;
+          const iv = bytes.slice(offset, offset + ivLen);
+          offset += ivLen;
+          const meta = JSON.parse(textDecoder.decode(bytes.slice(offset, offset + metaLen)));
+          offset += metaLen;
+          return {
+            salt,
+            files: [{
+              name: meta.originalName || "recovered-file",
+              type: meta.originalType || "application/octet-stream",
+              ciphertext: bytes.slice(offset),
+              iv,
+            }],
+          };
+        }
+
+        if (version !== 2) throw new Error("Unsupported encrypted file version.");
         const metaLen = view.getUint32(offset, false);
         offset += 4;
-
-        const totalHeader = offset + saltLen + ivLen + metaLen;
-        if (bytes.length < totalHeader) {
-          throw new Error("Encrypted file looks corrupted or incomplete.");
-        }
-
+        const totalHeader = offset + saltLen + metaLen;
+        if (bytes.length < totalHeader) throw new Error("Encrypted file looks corrupted or incomplete.");
         const salt = bytes.slice(offset, offset + saltLen);
         offset += saltLen;
-
-        const iv = bytes.slice(offset, offset + ivLen);
-        offset += ivLen;
-
-        const metaBytes = bytes.slice(offset, offset + metaLen);
+        const metadata = JSON.parse(textDecoder.decode(bytes.slice(offset, offset + metaLen)));
         offset += metaLen;
-
-        const metadata = JSON.parse(textDecoder.decode(metaBytes));
-        const ciphertext = bytes.slice(offset);
-
-        if (ciphertext.length === 0) {
-          throw new Error("Encrypted file contains no data.");
+        const body = bytes.slice(offset);
+        if (!metadata || !Array.isArray(metadata.files) || !metadata.files.length) {
+          throw new Error("Encrypted package metadata is missing file entries.");
         }
-
-        return { salt, iv, metadata, ciphertext };
+        let cursor = 0;
+        const files = metadata.files.map((entry) => {
+          const cipherLength = Number(entry.cipherLength) || 0;
+          if (cipherLength <= 0 || cursor + cipherLength > body.length) {
+            throw new Error("Encrypted package body is corrupted.");
+          }
+          const item = {
+            name: String(entry.name || "recovered-file"),
+            type: String(entry.type || "application/octet-stream"),
+            iv: base64ToBytes(entry.iv),
+            ciphertext: body.slice(cursor, cursor + cipherLength),
+          };
+          cursor += cipherLength;
+          return item;
+        });
+        return { salt, files };
       }
 
       async function deriveKey(password, salt) {
@@ -828,14 +880,8 @@
           false,
           ["deriveKey"]
         );
-
         return crypto.subtle.deriveKey(
-          {
-            name: "PBKDF2",
-            salt,
-            iterations: PBKDF2_ITERATIONS,
-            hash: "SHA-256",
-          },
+          { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
           keyMaterial,
           { name: "AES-GCM", length: 256 },
           false,
@@ -843,228 +889,300 @@
         );
       }
 
-      function setEncryptedDownload(blob, filename) {
-        revokeUrl("encryptedUrl");
-        state.encryptedBlob = blob;
-        state.encryptedUrl = URL.createObjectURL(blob);
-        state.encryptedName = filename;
-
-        downloadEncryptedBtn.href = state.encryptedUrl;
-        downloadEncryptedBtn.download = filename;
-        downloadEncryptedBtn.removeAttribute("aria-disabled");
-        downloadEncryptedBtn.style.pointerEvents = "auto";
-        downloadEncryptedBtn.style.opacity = "1";
+      function setDownloadAnchor(anchor, url, filename) {
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.removeAttribute("aria-disabled");
+        anchor.style.pointerEvents = "auto";
+        anchor.style.opacity = "1";
       }
 
-      function setDecryptedDownload(blob, filename) {
-        revokeUrl("decryptedUrl");
-        state.decryptedBlob = blob;
-        state.decryptedUrl = URL.createObjectURL(blob);
+      function disableDownloadAnchor(anchor) {
+        anchor.removeAttribute("href");
+        anchor.removeAttribute("download");
+        anchor.setAttribute("aria-disabled", "true");
+        anchor.style.pointerEvents = "none";
+        anchor.style.opacity = "0.45";
+      }
 
-        downloadDecryptedBtn.href = state.decryptedUrl;
-        downloadDecryptedBtn.download = filename;
-        downloadDecryptedBtn.removeAttribute("aria-disabled");
-        downloadDecryptedBtn.style.pointerEvents = "auto";
-        downloadDecryptedBtn.style.opacity = "1";
+      function renderFileList(container, files) {
+        container.innerHTML = "";
+        files.forEach((file, idx) => {
+          const row = document.createElement("div");
+          row.className = "file-chip";
+          const left = document.createElement("span");
+          left.textContent = `${idx + 1}. ${file.name}`;
+          const right = document.createElement("span");
+          right.textContent = formatBytes(file.size || 0);
+          row.append(left, right);
+          container.appendChild(row);
+        });
+      }
+
+      function renderEmptySourcePreview() {
+        sourcePreview.classList.add("empty");
+        sourcePreview.innerHTML = "<div><strong>No media selected yet</strong><br><span style=\"color: var(--muted); font-size: 13px;\">Your previews will appear here.</span></div>";
+        sourceMeta.innerHTML = "";
+        sourceList.innerHTML = "";
+      }
+
+      function renderEmptyDecryptedPreview() {
+        decryptedPreview.classList.add("empty");
+        decryptedPreview.innerHTML = "<div><strong>Recovered preview</strong><br><span style=\"color: var(--muted); font-size: 13px;\">Decrypted image or video will show here.</span></div>";
+        decryptedMeta.innerHTML = "";
+        decryptedList.innerHTML = "";
+      }
+
+      function showPreview(target, file, url) {
+        target.classList.remove("empty");
+        target.innerHTML = "";
+        if (isImageFile(file)) {
+          const img = document.createElement("img");
+          img.className = "media";
+          img.alt = file.name;
+          img.src = url;
+          target.appendChild(img);
+          return;
+        }
+        if (isVideoFile(file)) {
+          const video = document.createElement("video");
+          video.className = "media";
+          video.src = url;
+          video.controls = true;
+          video.playsInline = true;
+          video.preload = "metadata";
+          target.appendChild(video);
+          return;
+        }
+        target.classList.add("empty");
+        target.textContent = "Preview unavailable.";
+      }
+
+      function renderSourcePreviewGrid(files) {
+        sourcePreview.classList.remove("empty");
+        sourcePreview.innerHTML = "";
+        clearPreviewListUrls();
+        const grid = document.createElement("div");
+        grid.className = "preview-grid";
+        files.slice(0, 10).forEach((file) => {
+          const card = document.createElement("div");
+          card.className = "mini-preview";
+          const url = URL.createObjectURL(file);
+          state.sourcePreviewUrls.push(url);
+          if (isImageFile(file)) {
+            const img = document.createElement("img");
+            img.className = "media";
+            img.src = url;
+            img.alt = file.name;
+            card.appendChild(img);
+          } else {
+            const video = document.createElement("video");
+            video.className = "media";
+            video.src = url;
+            video.muted = true;
+            video.preload = "metadata";
+            card.appendChild(video);
+          }
+          const caption = document.createElement("div");
+          caption.className = "mini-caption";
+          caption.textContent = file.name;
+          card.appendChild(caption);
+          grid.appendChild(card);
+        });
+        sourcePreview.appendChild(grid);
       }
 
       function updateEncryptButtonState() {
-        encryptBtn.disabled = !(state.mediaFile && passwordInput.value.trim());
+        encryptBtn.disabled = !(state.mediaFiles.length && passwordInput.value.trim());
       }
 
       function updateDecryptButtonState() {
         decryptBtn.disabled = !(state.packageFile && decryptPasswordInput.value.trim());
       }
 
-      function selectMediaFile(file) {
-        if (!file) return;
+      function resetSourceUI() {
+        state.mediaFiles = [];
+        mediaInput.value = "";
+        passwordInput.value = "";
+        updateEncryptButtonState();
+        revokeUrl("encryptedUrl");
+        state.encryptedName = "";
+        disableDownloadAnchor(downloadEncryptedBtn);
+        setProgress(encryptProgress, 0);
+        setStatus(encryptStatus, "Ready to encrypt.", "info");
+        renderEmptySourcePreview();
+      }
 
-        if (!isSupportedMedia(file)) {
-          setStatus(encryptStatus, "Please choose an image or video file.", "bad");
+      function resetDecryptUI() {
+        state.packageFile = null;
+        packageInput.value = "";
+        decryptPasswordInput.value = "";
+        updateDecryptButtonState();
+        revokeUrl("decryptedUrl");
+        revokeUrl("decryptedZipUrl");
+        revokeUrl("decryptedPreviewUrl");
+        disableDownloadAnchor(downloadDecryptedBtn);
+        disableDownloadAnchor(downloadAllZipBtn);
+        setProgress(decryptProgress, 0);
+        setStatus(decryptStatus, "No encrypted file selected.", "info");
+        state.decryptedItems = [];
+        renderEmptyDecryptedPreview();
+      }
+
+      function selectMediaFiles(fileList) {
+        const files = Array.from(fileList || []).filter(isSupportedMedia);
+        if (!files.length) {
+          setStatus(encryptStatus, "Please choose image or video files only.", "bad");
           return;
         }
-
-        state.mediaFile = file;
+        state.mediaFiles = files;
         updateEncryptButtonState();
-        setStatus(encryptStatus, "File loaded. Add a password, then encrypt.", "info");
-
-        revokeUrl("sourcePreviewUrl");
-        state.sourcePreviewUrl = URL.createObjectURL(file);
-        showPreview(sourcePreview, file, state.sourcePreviewUrl);
-        renderFileMeta(sourceMeta, file, [
-          `Category: ${isImageFile(file) ? "Image" : isVideoFile(file) ? "Video" : "Unknown"}`,
-          `Ready for encryption.`,
-        ]);
+        const total = files.reduce((sum, file) => sum + file.size, 0);
+        sourceMeta.innerHTML = [
+          `Files selected: ${files.length}`,
+          `Total size: ${formatBytes(total)}`,
+          "Output: one .encmedia package"
+        ].map((line) => `<div>${line}</div>`).join("");
+        renderFileList(sourceList, files);
+        renderSourcePreviewGrid(files);
+        setStatus(encryptStatus, `${files.length} files loaded. Set password and encrypt.`, "info");
       }
 
       function selectPackageFile(file) {
         if (!file) return;
-
         state.packageFile = file;
         updateDecryptButtonState();
-        setStatus(decryptStatus, "Encrypted package loaded. Enter the password and decrypt.", "info");
-
-        renderEmptyDecryptedPreview();
-        clearElement(decryptedMeta);
+        setStatus(decryptStatus, "Encrypted package loaded. Enter password to decrypt.", "info");
       }
 
       async function encryptSelectedFile() {
-        const file = state.mediaFile;
+        if (!state.mediaFiles.length) return setStatus(encryptStatus, "Choose media files first.", "bad");
         const password = passwordInput.value.trim();
-
-        if (!file) {
-          setStatus(encryptStatus, "Choose an image or video first.", "bad");
-          return;
-        }
-
-        if (!password) {
-          setStatus(encryptStatus, "Enter a password before encrypting.", "bad");
-          return;
-        }
+        if (!password) return setStatus(encryptStatus, "Enter a password before encrypting.", "bad");
 
         try {
           encryptBtn.disabled = true;
-          setStatus(encryptStatus, "Preparing encryption...", "info");
           setProgress(encryptProgress, 10);
-
-          const fileBuffer = await readFileAsArrayBuffer(file);
+          setStatus(encryptStatus, "Deriving key...", "info");
+          const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+          const key = await deriveKey(password, salt);
           setProgress(encryptProgress, 25);
 
-          const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-          const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+          const entries = [];
+          const chunks = [];
+          for (let i = 0; i < state.mediaFiles.length; i++) {
+            const file = state.mediaFiles[i];
+            setStatus(encryptStatus, `Encrypting ${i + 1}/${state.mediaFiles.length}: ${file.name}`, "info");
+            const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+            const plain = await readFileAsArrayBuffer(file);
+            const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain));
+            chunks.push(cipher);
+            entries.push({
+              name: file.name,
+              type: inferMimeType(file),
+              size: file.size,
+              iv: bytesToBase64(iv),
+              cipherLength: cipher.length,
+            });
+            setProgress(encryptProgress, 25 + Math.round(((i + 1) / state.mediaFiles.length) * 65));
+          }
 
-          setStatus(encryptStatus, "Deriving key...", "info");
-          const key = await deriveKey(password, salt);
-          setProgress(encryptProgress, 45);
-
-          setStatus(encryptStatus, "Encrypting media locally...", "info");
-          const ciphertextBuffer = await crypto.subtle.encrypt(
-            { name: "AES-GCM", iv },
-            key,
-            fileBuffer
-          );
-          setProgress(encryptProgress, 75);
-
-          const metadata = {
-            originalName: file.name,
-            originalType: inferMimeType(file),
-            originalSize: file.size,
-            originalLastModified: file.lastModified || null,
-            createdAt: new Date().toISOString(),
-            algorithm: "AES-GCM",
-            kdf: {
-              name: "PBKDF2",
-              hash: "SHA-256",
-              iterations: PBKDF2_ITERATIONS,
-            },
-          };
-
-          const packageBytes = buildPacket({
+          const packet = buildPacketV2({
             salt,
-            iv,
-            metadata,
-            ciphertext: new Uint8Array(ciphertextBuffer),
+            metadata: {
+              createdAt: new Date().toISOString(),
+              fileCount: entries.length,
+              kdf: { name: "PBKDF2", hash: "SHA-256", iterations: PBKDF2_ITERATIONS },
+              algorithm: "AES-GCM",
+              files: entries,
+            },
+            ciphertext: concatUint8Arrays(chunks),
           });
-
-          const encryptedBlob = new Blob([packageBytes], { type: "application/octet-stream" });
-          const safeBase = sanitizeDownloadName(file.name);
-          const packageName = `${safeBase}.encmedia`;
-
-          setEncryptedDownload(encryptedBlob, packageName);
+          const blob = new Blob([packet], { type: "application/octet-stream" });
+          revokeUrl("encryptedUrl");
+          state.encryptedUrl = URL.createObjectURL(blob);
+          state.encryptedName = state.mediaFiles.length === 1
+            ? `${sanitizeDownloadName(state.mediaFiles[0].name)}.encmedia`
+            : `media-vault-${new Date().toISOString().slice(0, 10)}.encmedia`;
+          setDownloadAnchor(downloadEncryptedBtn, state.encryptedUrl, state.encryptedName);
           setProgress(encryptProgress, 100);
-          setStatus(encryptStatus, `Encrypted successfully. Download "${packageName}".`, "good");
+          setStatus(encryptStatus, `${entries.length} files encrypted into one package.`, "good");
         } catch (err) {
           console.error(err);
           setProgress(encryptProgress, 0);
-          setStatus(
-            encryptStatus,
-            "Encryption failed. Check the file and try again.",
-            "bad"
-          );
+          setStatus(encryptStatus, "Encryption failed. Try again.", "bad");
         } finally {
-          encryptBtn.disabled = !(state.mediaFile && passwordInput.value.trim());
+          updateEncryptButtonState();
         }
       }
 
       async function decryptSelectedFile() {
-        const file = state.packageFile;
+        if (!state.packageFile) return setStatus(decryptStatus, "Choose an encrypted file first.", "bad");
         const password = decryptPasswordInput.value.trim();
-
-        if (!file) {
-          setStatus(decryptStatus, "Choose an encrypted file first.", "bad");
-          return;
-        }
-
-        if (!password) {
-          setStatus(decryptStatus, "Enter the password before decrypting.", "bad");
-          return;
-        }
+        if (!password) return setStatus(decryptStatus, "Enter the password before decrypting.", "bad");
 
         try {
           decryptBtn.disabled = true;
-          setStatus(decryptStatus, "Reading encrypted package...", "info");
           setProgress(decryptProgress, 10);
-
-          const buffer = await readFileAsArrayBuffer(file);
-          setProgress(decryptProgress, 25);
-
+          setStatus(decryptStatus, "Reading package...", "info");
+          const buffer = await readFileAsArrayBuffer(state.packageFile);
           const packet = parsePacket(buffer);
-          setProgress(decryptProgress, 40);
-
+          setProgress(decryptProgress, 30);
           setStatus(decryptStatus, "Deriving key...", "info");
           const key = await deriveKey(password, packet.salt);
-          setProgress(decryptProgress, 60);
 
-          setStatus(decryptStatus, "Decrypting locally...", "info");
-          const plaintextBuffer = await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: packet.iv },
-            key,
-            packet.ciphertext
-          );
-          setProgress(decryptProgress, 85);
+          state.decryptedItems = [];
+          for (let i = 0; i < packet.files.length; i++) {
+            const part = packet.files[i];
+            setStatus(decryptStatus, `Decrypting ${i + 1}/${packet.files.length}: ${part.name}`, "info");
+            const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: part.iv }, key, part.ciphertext);
+            const blob = new Blob([plain], { type: part.type || "application/octet-stream" });
+            state.decryptedItems.push({ name: sanitizeDownloadName(part.name), type: part.type, size: blob.size, blob });
+            setProgress(decryptProgress, 30 + Math.round(((i + 1) / packet.files.length) * 65));
+          }
 
-          const fileName = sanitizeDownloadName(packet.metadata.originalName || "recovered-file");
-          const mimeType = packet.metadata.originalType || "application/octet-stream";
-          const blob = new Blob([plaintextBuffer], { type: mimeType });
+          const first = state.decryptedItems[0];
+          revokeUrl("decryptedUrl");
+          state.decryptedUrl = URL.createObjectURL(first.blob);
+          setDownloadAnchor(downloadDecryptedBtn, state.decryptedUrl, first.name);
+          revokeUrl("decryptedZipUrl");
+          const zipBlob = await buildZipBlob(state.decryptedItems);
+          state.decryptedZipUrl = URL.createObjectURL(zipBlob);
+          const zipName = `recovered-media-${new Date().toISOString().slice(0, 10)}.zip`;
+          setDownloadAnchor(downloadAllZipBtn, state.decryptedZipUrl, zipName);
 
-          setDecryptedDownload(blob, fileName);
-          setProgress(decryptProgress, 100);
-          setStatus(decryptStatus, `Decrypted successfully. Download "${fileName}".`, "good");
-
-          // Show a recovered preview using the original type/name.
-          const previewFile = new File([blob], fileName, { type: mimeType });
+          const previewFile = new File([first.blob], first.name, { type: first.type || "application/octet-stream" });
           revokeUrl("decryptedPreviewUrl");
           state.decryptedPreviewUrl = URL.createObjectURL(previewFile);
           showPreview(decryptedPreview, previewFile, state.decryptedPreviewUrl);
-          renderFileMeta(decryptedMeta, previewFile, [
-            `Recovered from encrypted package.`,
-          ]);
+
+          const total = state.decryptedItems.reduce((sum, item) => sum + item.size, 0);
+          decryptedMeta.innerHTML = [
+            `Recovered files: ${state.decryptedItems.length}`,
+            `Total size: ${formatBytes(total)}`,
+            "Main download button gives the first recovered file."
+          ].map((line) => `<div>${line}</div>`).join("");
+          renderFileList(decryptedList, state.decryptedItems);
+
+          setProgress(decryptProgress, 100);
+          setStatus(decryptStatus, `Decrypted ${state.decryptedItems.length} file(s) successfully.`, "good");
         } catch (err) {
           console.error(err);
-          setProgress(decryptProgress, 0);
-
           const message = String(err && err.message ? err.message : err || "");
-          const isPasswordIssue =
-            /operationerror|decrypt|authentication|subtlecrypto/i.test(message);
-
+          const pwdIssue = /operationerror|decrypt|authentication|subtlecrypto/i.test(message);
+          setProgress(decryptProgress, 0);
           setStatus(
             decryptStatus,
-            isPasswordIssue
-              ? "Wrong password, tampered file, or corrupted package."
-              : "Decryption failed. Make sure the file is a valid Media Vault package.",
+            pwdIssue ? "Wrong password, tampered file, or corrupted package." : "Decryption failed for this package.",
             "bad"
           );
         } finally {
-          decryptBtn.disabled = !(state.packageFile && decryptPasswordInput.value.trim());
+          updateDecryptButtonState();
         }
       }
 
-      // -----------------------------
-      // Drag and drop helpers
-      // -----------------------------
-      function setupDropzone(dropzone, input, onFileSelected) {
+      function setupDropzone(dropzone, input, onFilesSelected) {
         const openPicker = () => input.click();
-
         dropzone.addEventListener("click", openPicker);
         dropzone.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -1072,71 +1190,64 @@
             openPicker();
           }
         });
-
-        ["dragenter", "dragover"].forEach((eventName) => {
-          dropzone.addEventListener(eventName, (e) => {
+        ["dragenter", "dragover"].forEach((name) => {
+          dropzone.addEventListener(name, (e) => {
             e.preventDefault();
             e.stopPropagation();
             dropzone.classList.add("dragover");
           });
         });
-
-        ["dragleave", "drop"].forEach((eventName) => {
-          dropzone.addEventListener(eventName, (e) => {
+        ["dragleave", "drop"].forEach((name) => {
+          dropzone.addEventListener(name, (e) => {
             e.preventDefault();
             e.stopPropagation();
             dropzone.classList.remove("dragover");
           });
         });
-
         dropzone.addEventListener("drop", (e) => {
-          const file = e.dataTransfer?.files?.[0];
-          if (file) onFileSelected(file);
+          const files = e.dataTransfer?.files;
+          if (files && files.length) onFilesSelected(files);
         });
-
         input.addEventListener("change", () => {
-          const file = input.files?.[0];
-          if (file) onFileSelected(file);
+          const files = input.files;
+          if (files && files.length) onFilesSelected(files);
         });
       }
 
-      // -----------------------------
-      // Event wiring
-      // -----------------------------
-      setupDropzone(mediaDropzone, mediaInput, selectMediaFile);
-      setupDropzone(packageDropzone, packageInput, selectPackageFile);
+      setupDropzone(mediaDropzone, mediaInput, selectMediaFiles);
+      setupDropzone(packageDropzone, packageInput, (files) => selectPackageFile(files[0]));
 
       passwordInput.addEventListener("input", updateEncryptButtonState);
       decryptPasswordInput.addEventListener("input", updateDecryptButtonState);
-
       encryptBtn.addEventListener("click", encryptSelectedFile);
       decryptBtn.addEventListener("click", decryptSelectedFile);
-
       clearBtn.addEventListener("click", resetSourceUI);
       clearDecryptBtn.addEventListener("click", resetDecryptUI);
 
       downloadEncryptedBtn.addEventListener("click", () => {
-        if (!state.encryptedUrl) return;
-        setStatus(encryptStatus, `Ready: ${state.encryptedName}`, "good");
+        if (state.encryptedUrl) setStatus(encryptStatus, `Ready: ${state.encryptedName}`, "good");
       });
-
       downloadDecryptedBtn.addEventListener("click", () => {
-        if (!state.decryptedUrl) return;
-        setStatus(decryptStatus, "Recovered file ready.", "good");
+        if (state.decryptedUrl) setStatus(decryptStatus, "Recovered file ready.", "good");
+      });
+      downloadAllZipBtn.addEventListener("click", () => {
+        if (state.decryptedZipUrl) setStatus(decryptStatus, "ZIP download is ready.", "good");
       });
 
-      // Initial state
       renderEmptySourcePreview();
       renderEmptyDecryptedPreview();
+      disableDownloadAnchor(downloadEncryptedBtn);
+      disableDownloadAnchor(downloadDecryptedBtn);
+      disableDownloadAnchor(downloadAllZipBtn);
       setProgress(encryptProgress, 0);
       setProgress(decryptProgress, 0);
 
-      // Clean up object URLs on page close.
       window.addEventListener("beforeunload", () => {
         revokeUrl("encryptedUrl");
         revokeUrl("decryptedUrl");
-        revokeUrl("sourcePreviewUrl");
+        revokeUrl("decryptedZipUrl");
         revokeUrl("decryptedPreviewUrl");
+        clearPreviewListUrls();
       });
     })();
   </script>
