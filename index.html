@@ -313,6 +313,15 @@
       color: var(--muted);
     }
 
+    .file-chip.clickable {
+      cursor: pointer;
+      transition: background 150ms ease;
+    }
+
+    .file-chip.clickable:hover {
+      background: rgba(255,255,255,0.08);
+    }
+
     .preview {
       border-radius: var(--radius-lg);
       overflow: hidden;
@@ -905,11 +914,17 @@
         anchor.style.opacity = "0.45";
       }
 
-      function renderFileList(container, files) {
+      function renderFileList(container, files, onSelect) {
         container.innerHTML = "";
         files.forEach((file, idx) => {
           const row = document.createElement("div");
           row.className = "file-chip";
+
+          if (onSelect) {
+            row.classList.add("clickable");
+            row.addEventListener("click", () => onSelect(file, idx));
+          }
+
           const left = document.createElement("span");
           left.textContent = `${idx + 1}. ${file.name}`;
           const right = document.createElement("span");
@@ -1162,7 +1177,19 @@
             `Total size: ${formatBytes(total)}`,
             "Main download button gives the first recovered file."
           ].map((line) => `<div>${line}</div>`).join("");
-          renderFileList(decryptedList, state.decryptedItems);
+
+          renderFileList(decryptedList, state.decryptedItems, (item) => {
+            // 1. Swap the visual preview
+            const previewFile = new File([item.blob], item.name, { type: item.type || "application/octet-stream" });
+            revokeUrl("decryptedPreviewUrl");
+            state.decryptedPreviewUrl = URL.createObjectURL(previewFile);
+            showPreview(decryptedPreview, previewFile, state.decryptedPreviewUrl);
+
+            // 2. Update the single file download button to point to the clicked file
+            revokeUrl("decryptedUrl");
+            state.decryptedUrl = URL.createObjectURL(item.blob);
+            setDownloadAnchor(downloadDecryptedBtn, state.decryptedUrl, item.name);
+          });
 
           setProgress(decryptProgress, 100);
           setStatus(decryptStatus, `Decrypted ${state.decryptedItems.length} file(s) successfully.`, "good");
@@ -1252,4 +1279,5 @@
     })();
   </script>
 </body>
+</html>
 </html>
